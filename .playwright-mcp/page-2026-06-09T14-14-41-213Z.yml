@@ -1,0 +1,110 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img [ref=e8]
+        - generic [ref=e12]:
+          - heading "Arkila" [level=1] [ref=e13]
+          - paragraph [ref=e14]: Property Manager
+      - button "Close menu" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+    - navigation [ref=e19]:
+      - link "Dashboard" [ref=e20] [cursor=pointer]:
+        - /url: /
+        - img [ref=e21]
+        - text: Dashboard
+      - link "Properties" [ref=e26] [cursor=pointer]:
+        - /url: /properties
+        - img [ref=e27]
+        - text: Properties
+      - link "Units" [ref=e31] [cursor=pointer]:
+        - /url: /units
+        - img [ref=e32]
+        - text: Units
+      - link "Tenants" [ref=e35] [cursor=pointer]:
+        - /url: /tenants
+        - img [ref=e36]
+        - text: Tenants
+      - link "Rent Payments" [ref=e41] [cursor=pointer]:
+        - /url: /rent-payments
+        - img [ref=e42]
+        - text: Rent Payments
+      - link "Utilities" [ref=e45] [cursor=pointer]:
+        - /url: /utilities
+        - img [ref=e46]
+        - text: Utilities
+      - link "Expenses" [ref=e48] [cursor=pointer]:
+        - /url: /expenses
+        - img [ref=e49]
+        - text: Expenses
+      - link "Documents" [ref=e51] [cursor=pointer]:
+        - /url: /documents
+        - img [ref=e52]
+        - text: Documents
+      - link "Notifications" [ref=e55] [cursor=pointer]:
+        - /url: /notifications
+        - img [ref=e56]
+        - text: Notifications
+      - link "Reports" [ref=e59] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e60]
+        - text: Reports
+      - link "Receipts" [ref=e61] [cursor=pointer]:
+        - /url: /receipts
+        - img [ref=e62]
+        - text: Receipts
+    - paragraph [ref=e67]: Arkila v1.0 · For Filipino Landlords
+  - generic [ref=e68]:
+    - banner [ref=e69]:
+      - generic [ref=e70]:
+        - button "Open navigation menu" [ref=e71] [cursor=pointer]:
+          - img [ref=e72]
+        - heading "Dashboard" [level=2] [ref=e73]
+      - link "Notifications" [ref=e74] [cursor=pointer]:
+        - /url: /notifications
+        - img [ref=e75]
+    - main [ref=e78]:
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e82]:
+            - generic [ref=e83]:
+              - paragraph [ref=e84]: Properties
+              - paragraph [ref=e85]: "0"
+            - img [ref=e87]
+          - generic [ref=e92]:
+            - generic [ref=e93]:
+              - paragraph [ref=e94]: Total Units
+              - paragraph [ref=e95]: "0"
+            - img [ref=e97]
+          - generic [ref=e101]:
+            - generic [ref=e102]:
+              - paragraph [ref=e103]: Occupied
+              - paragraph [ref=e104]: "0"
+              - paragraph [ref=e105]: 0 vacant
+            - img [ref=e107]
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - paragraph [ref=e115]: Collected
+              - paragraph [ref=e116]: ₱0.00
+              - paragraph [ref=e117]: June 2026
+            - img [ref=e119]
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - paragraph [ref=e125]: Unpaid
+              - paragraph [ref=e126]: "0"
+              - paragraph [ref=e127]: this month
+            - img [ref=e129]
+          - generic [ref=e133]:
+            - generic [ref=e134]:
+              - paragraph [ref=e135]: Overdue
+              - paragraph [ref=e136]: "0"
+              - paragraph [ref=e137]: alerts
+            - img [ref=e139]
+        - generic [ref=e141]:
+          - generic [ref=e142]:
+            - generic [ref=e143]:
+              - heading "Recent Rent Payments" [level=3] [ref=e144]
+              - paragraph [ref=e145]: 0 latest records
+            - link "View all →" [ref=e147] [cursor=pointer]:
+              - /url: /rent-payments
+          - paragraph [ref=e149]: No payment records yet.

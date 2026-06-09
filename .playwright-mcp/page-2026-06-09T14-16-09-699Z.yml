@@ -1,0 +1,95 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - img [ref=e8]
+      - generic [ref=e12]:
+        - heading "Arkila" [level=1] [ref=e13]
+        - paragraph [ref=e14]: Property Manager
+    - navigation [ref=e15]:
+      - link "Dashboard" [ref=e16] [cursor=pointer]:
+        - /url: /
+        - img [ref=e17]
+        - text: Dashboard
+      - link "Properties" [ref=e22] [cursor=pointer]:
+        - /url: /properties
+        - img [ref=e23]
+        - text: Properties
+      - link "Units" [ref=e27] [cursor=pointer]:
+        - /url: /units
+        - img [ref=e28]
+        - text: Units
+      - link "Tenants" [ref=e31] [cursor=pointer]:
+        - /url: /tenants
+        - img [ref=e32]
+        - text: Tenants
+      - link "Rent Payments" [ref=e37] [cursor=pointer]:
+        - /url: /rent-payments
+        - img [ref=e38]
+        - text: Rent Payments
+      - link "Utilities" [ref=e41] [cursor=pointer]:
+        - /url: /utilities
+        - img [ref=e42]
+        - text: Utilities
+      - link "Expenses" [ref=e44] [cursor=pointer]:
+        - /url: /expenses
+        - img [ref=e45]
+        - text: Expenses
+      - link "Documents" [ref=e47] [cursor=pointer]:
+        - /url: /documents
+        - img [ref=e48]
+        - text: Documents
+      - link "Notifications" [ref=e51] [cursor=pointer]:
+        - /url: /notifications
+        - img [ref=e52]
+        - text: Notifications
+      - link "Reports" [ref=e55] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e56]
+        - text: Reports
+      - link "Receipts" [ref=e57] [cursor=pointer]:
+        - /url: /receipts
+        - img [ref=e58]
+        - text: Receipts
+    - paragraph [ref=e63]: Arkila v1.0 · For Filipino Landlords
+  - generic [ref=e64]:
+    - banner [ref=e65]:
+      - heading "Properties" [level=2] [ref=e67]
+      - link "Notifications" [ref=e68] [cursor=pointer]:
+        - /url: /notifications
+        - img [ref=e69]
+    - main [ref=e72]:
+      - generic [ref=e73]:
+        - button "Add Property" [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+          - text: Add Property
+        - generic [ref=e77]:
+          - generic [ref=e79]:
+            - heading "All Properties" [level=3] [ref=e80]
+            - paragraph [ref=e81]: 0 properties
+          - generic [ref=e83]:
+            - img [ref=e85]
+            - heading "No properties yet" [level=3] [ref=e89]
+            - paragraph [ref=e90]: Add your first rental property to get started.
+            - button "Add Property" [ref=e91] [cursor=pointer]:
+              - img [ref=e92]
+              - text: Add Property
+        - dialog "Add Property" [ref=e93]:
+          - generic [ref=e95]:
+            - generic [ref=e96]:
+              - heading "Add Property" [level=2] [ref=e97]
+              - button "Close dialog" [ref=e98] [cursor=pointer]:
+                - img [ref=e99]
+            - generic [ref=e103]:
+              - generic [ref=e104]:
+                - generic [ref=e105]: Property Name*
+                - textbox "Property Name" [ref=e106]:
+                  - /placeholder: e.g., Bahay ni Reyes, Sunset Apartment
+                - alert [ref=e113]: Property name is required
+              - generic [ref=e107]:
+                - generic [ref=e108]: Address*
+                - textbox "Address*" [ref=e109]:
+                  - /placeholder: Full address including barangay, city, province
+                - paragraph [ref=e114]: Address is required
+            - generic [ref=e110]:
+              - button "Cancel" [ref=e111] [cursor=pointer]
+              - button "Add Property" [active] [ref=e112] [cursor=pointer]
