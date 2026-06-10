@@ -167,7 +167,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-5 py-3 text-gray-600">{unit?.unitNumber || '—'}</td>
                         <td className="px-5 py-3 text-gray-600">{formatMonth(p.month, p.year)}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-gray-900">{formatCurrency(p.amount)}</td>
+                        <td className="px-5 py-3 text-right  font-semibold text-blue-900">{formatCurrency(p.amount)}</td>
                         <td className="px-5 py-3">{statusBadge(p.status)}</td>
                         <td className="px-5 py-3 text-gray-400">{p.paymentDate ? formatDate(p.paymentDate) : '—'}</td>
                       </tr>

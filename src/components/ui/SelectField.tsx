@@ -12,7 +12,7 @@ const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(
   ({ label, error, options, placeholder, className, id, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 ">
         {label && (
           <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
             {label}

@@ -52,7 +52,8 @@ export function StatCard({ label, value, icon, iconBg = 'bg-blue-50', sub, subCo
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-medium text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+          {/* <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p> */}
+          <p className="mt-1 text-sm md:text-2xl font-bold text-gray-900">{value}</p>
           {sub && <p className={`mt-1 text-xs ${subColor}`}>{sub}</p>}
         </div>
         <div className={`p-2.5 rounded-lg ${iconBg} shrink-0`}>{icon}</div>

@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { statusBadge } from '@/components/ui/Badge';
 import { useToast } from '@/contexts/ToastContext';
-import { formatDate, formatMonth, monthOptions, currentMonth, currentYear } from '@/lib/utils';
+import { formatDate, formatMonth, currentMonth, currentYear } from '@/lib/utils';
 
 type Form = {
   tenantId: string;
@@ -43,7 +43,7 @@ export default function NotificationsPage() {
   const tenants = useLiveQuery(() => db.tenants.toArray());
   const notifications = useLiveQuery(() => db.notifications.orderBy('createdAt').reverse().toArray());
 
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
+  // const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
   const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
   const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
   const tenantOptions = (tenants || []).map(t => ({ value: t.id!, label: `${t.firstName} ${t.lastName}` }));
@@ -174,10 +174,16 @@ export default function NotificationsPage() {
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={generateNotifications} loading={generating}>
+          <Button variant="outline" onClick={generateNotifications} loading={generating} 
+            size="sm"
+            className="md:py-2 md:px-4 md:text-base"
+          >
             <AlertCircle size={14} />Generate Rent Due
           </Button>
-          <Button onClick={() => { setForm(empty); setErrors({}); setModalOpen(true); }}>
+          <Button onClick={() => { setForm(empty); setErrors({}); setModalOpen(true); }}
+            size="sm"
+            className="md:py-2 md:px-4 md:text-base"
+          >
             <Plus size={16} />Add Notification
           </Button>
         </div>

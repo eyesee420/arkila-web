@@ -103,31 +103,76 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      {/* Period filter */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-600">Report Period:</span>
-        <SelectField options={monthOptions()} value={month} onChange={e => setMonth(e.target.value)} className="w-36" />
-        <SelectField options={yearOptions} value={year} onChange={e => setYear(e.target.value)} className="w-28" />
-        <span className="text-sm text-gray-500">— {formatMonth(Number(month), Number(year))}</span>
+    {/* Added flex-wrap, w-full, and responsive justifications */}
+    <div className="flex flex-wrap items-center gap-3 w-full sm:justify-start">
+      
+      {/* The Label: Takes up full width on mobile so dropdowns start cleanly below it */}
+      <span className="text-sm font-medium text-gray-600 w-full sm:w-auto">
+        Report Period:
+      </span> 
+      
+      {/* A sub-container for the dropdowns so they sit nicely side-by-side and fill the space on mobile */}
+      <div className="flex flex-1 w-full sm:w-auto gap-2">
+        <SelectField 
+          options={monthOptions()} 
+          value={month} 
+          onChange={e => setMonth(e.target.value)} 
+          className="flex-1 sm:w-36" 
+        />
+        <SelectField 
+          options={yearOptions} 
+          value={year} 
+          onChange={e => setYear(e.target.value)} 
+          className="flex-1 sm:w-28" 
+        />
       </div>
+
+      {/* Hides completely on mobile (hidden) and turns into an inline element from tablet/desktop sizes up (sm:inline) */}
+      <span className="text-sm text-gray-500 hidden sm:inline">
+        — {formatMonth(Number(month), Number(year))}
+      </span>
+    </div>
 
       {/* Income Summary */}
       <div>
         <h3 className="text-base font-semibold text-gray-800 mb-3 flex items-center gap-2">
           <TrendingUp size={18} className="text-green-600" />Income Summary
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Rent Collected" value={formatCurrency(report.rentCollected)}
-            icon={<TrendingUp size={20} className="text-green-700" />} iconBg="bg-green-100" />
-          <StatCard label="Utilities Collected" value={formatCurrency(report.utilCollected)}
-            icon={<TrendingUp size={20} className="text-blue-700" />} iconBg="bg-blue-100" />
-          <StatCard label="Total Income" value={formatCurrency(report.totalIncome)}
-            icon={<TrendingUp size={20} className="text-emerald-700" />} iconBg="bg-emerald-100" />
-          <StatCard label="Net Income" value={formatCurrency(report.netIncome)}
-            icon={report.netIncome >= 0 ? <TrendingUp size={20} className="text-indigo-700" /> : <TrendingDown size={20} className="text-red-700" />}
-            iconBg={report.netIncome >= 0 ? 'bg-indigo-100' : 'bg-red-100'}
-            sub="after expenses" />
-        </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard 
+                label="Rent Collected" 
+                value={formatCurrency(report.rentCollected)}
+                // Removed size={20}, added w-3.5 h-3.5 (size 14) and md:w-5 md:h-5 (size 20)
+                icon={<TrendingUp className="text-green-700 w-3.5 h-3.5 md:w-5 md:h-5" />} 
+                iconBg="bg-green-100" 
+              />
+              
+              <StatCard 
+                label="Utilities Collected" 
+                value={formatCurrency(report.utilCollected)}
+                icon={<TrendingUp className="text-blue-700 w-3.5 h-3.5 md:w-5 md:h-5" />} 
+                iconBg="bg-blue-100" 
+              />
+              
+              <StatCard 
+                label="Total Income" 
+                value={formatCurrency(report.totalIncome)}
+                icon={<TrendingUp className="text-emerald-700 w-3.5 h-3.5 md:w-5 md:h-5" />} 
+                iconBg="bg-emerald-100" 
+              />
+              
+              <StatCard 
+                label="Net Income" 
+                value={formatCurrency(report.netIncome)}
+                icon={report.netIncome >= 0 ? (
+                  <TrendingUp className="text-indigo-700 w-3.5 h-3.5 md:w-5 md:h-5" />
+                ) : (
+                  <TrendingDown className="text-red-700 w-3.5 h-3.5 md:w-5 md:h-5" />
+                )}
+                iconBg={report.netIncome >= 0 ? 'bg-indigo-100' : 'bg-red-100'}
+                sub="after expenses" 
+              />
+            </div>
       </div>
 
       {/* Rent Detail */}

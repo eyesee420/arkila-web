@@ -198,6 +198,7 @@ export default function RentPayments() {
         )}
       </div>
 
+
       {/* Summary */}
       {filtered.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
