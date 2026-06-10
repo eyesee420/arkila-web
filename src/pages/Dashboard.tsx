@@ -87,19 +87,22 @@ export default function Dashboard() {
         <StatCard
           label="Properties"
           value={data.properties.length}
-          icon={<Building2 size={19} className="text-blue-600" />}
+          // icon={<Building2 size={19} className="text-blue-600" />}
+          icon={<Building2 className="text-blue-600 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-blue-50"
         />
         <StatCard
           label="Total Units"
           value={data.units.length}
-          icon={<DoorOpen size={19} className="text-indigo-600" />}
+          // icon={<DoorOpen size={19} className="text-indigo-600" />}
+          icon={<DoorOpen className="text-indigo-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-indigo-50"
         />
         <StatCard
           label="Occupied"
           value={data.occupied}
-          icon={<Users size={19} className="text-green-600" />}
+          // icon={<Users size={19} className="text-green-600" />}
+          icon={<Users className="text-green-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-green-50"
           sub={`${data.vacant} vacant`}
           subColor="text-gray-400"
@@ -107,14 +110,16 @@ export default function Dashboard() {
         <StatCard
           label="Collected"
           value={formatCurrency(data.collected)}
-          icon={<TrendingUp size={19} className="text-emerald-600" />}
+          // icon={<TrendingUp size={19} className="text-emerald-600" />}
+          icon={<TrendingUp className="text-emerald-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-emerald-50"
           sub={formatMonth(month, year)}
         />
         <StatCard
           label="Unpaid"
           value={data.unpaid}
-          icon={<Banknote size={19} className="text-amber-600" />}
+          // icon={<Banknote size={19} className="text-amber-600" />}
+          icon={<Banknote className="text-amber-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-amber-50"
           sub="this month"
           subColor={data.unpaid > 0 ? 'text-amber-500' : 'text-gray-400'}
@@ -122,7 +127,8 @@ export default function Dashboard() {
         <StatCard
           label="Overdue"
           value={data.overdue}
-          icon={<AlertCircle size={19} className="text-red-500" />}
+          // icon={<AlertCircle size={19} className="text-red-500" />}
+          icon={<AlertCircle className="text-red-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
           iconBg="bg-red-50"
           sub="alerts"
           subColor={data.overdue > 0 ? 'text-red-500' : 'text-gray-400'}
