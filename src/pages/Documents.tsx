@@ -59,7 +59,7 @@ export default function Documents() {
   const documents = useLiveQuery(() => db.documents.orderBy('id').reverse().toArray());
 
   const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
+  // const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
   const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
   const tenantOptions = (tenants || [])
     .filter(t => !activePropertyId || t.propertyId === activePropertyId)
@@ -147,9 +147,11 @@ export default function Documents() {
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <SelectField options={tenantOptions} placeholder="All Tenants" value={filterTenantId}
           onChange={e => setFilterTenantId(e.target.value)} className="w-52" />
-        <Button onClick={() => { setForm(empty); setFileData(''); setFileName(''); setErrors({}); setModalOpen(true); }}>
-          <Plus size={16} />Upload Document
-        </Button>
+        {filtered.length > 0 && (
+          <Button onClick={() => { setForm(empty); setFileData(''); setFileName(''); setErrors({}); setModalOpen(true); }}>
+            <Plus size={16} />Upload Document
+          </Button>
+        )}
       </div>
 
       <Card>

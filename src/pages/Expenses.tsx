@@ -126,7 +126,11 @@ export default function Expenses() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center justify-between">
-        <Button onClick={openAdd}><Plus size={16} />Add Expense</Button>
+        {filtered.length > 0 && (
+          <Button onClick={openAdd}>
+            <Plus size={16} /> Add Expense
+          </Button>
+        )}
       </div>
 
       {filtered.length > 0 && (

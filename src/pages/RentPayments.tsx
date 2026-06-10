@@ -57,8 +57,8 @@ export default function RentPayments() {
     return db.rentPayments.orderBy('id').reverse().toArray();
   });
 
-  const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
+  // const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
+  // const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
   const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
   const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
 
@@ -191,7 +191,11 @@ export default function RentPayments() {
           <SelectField options={yearOptions} placeholder="All Years" value={filterYear}
             onChange={e => setFilterYear(e.target.value)} className="w-28" />
         </div>
-        <Button onClick={openAdd}><Plus size={16} />Record Payment</Button>
+        {filtered.length > 0 && (
+          <Button onClick={openAdd}>
+            <Plus size={16} /> Record Payment
+          </Button>
+        )}
       </div>
 
       {/* Summary */}

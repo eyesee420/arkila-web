@@ -106,7 +106,11 @@ export default function Properties() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openAdd}><Plus size={16} />Add Property</Button>
+      {properties.length > 0 && (
+        <Button onClick={openAdd}>
+          <Plus size={16} /> Add Property
+        </Button>
+      )}
       </div>
 
       <Card>
