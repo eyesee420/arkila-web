@@ -3,9 +3,8 @@ import {
   LayoutDashboard, Building2, DoorOpen, Users, Banknote,
   Zap, Wrench, FileText, Bell, BarChart2, Printer, X, ChevronDown,
 } from 'lucide-react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/db/database';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
+import { useProperties } from '@/hooks/useDbQueries';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { cn } from '@/lib/utils';
 
 const nav = [
@@ -28,8 +27,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ open, onClose }: SidebarProps) {
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const { activePropertyId, setActivePropertyId } = useActiveProperty();
+  const { data: properties } = useProperties();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
+  const setActivePropertyId = usePropertyFilterStore((s) => s.setActivePropertyId);
 
   return (
     <>
@@ -48,7 +48,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-white/8">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
@@ -68,18 +67,17 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Property selector */}
         {(properties || []).length > 0 && (
           <div className="px-3 py-3 border-b border-white/8">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-1">Property</p>
             <div className="relative">
               <select
                 value={activePropertyId ?? ''}
-                onChange={e => setActivePropertyId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setActivePropertyId(e.target.value ? Number(e.target.value) : null)}
                 className="w-full appearance-none bg-white/10 text-white text-sm rounded-lg pl-3 pr-8 py-2 border border-white/15 focus:outline-none focus:border-blue-500 cursor-pointer"
               >
                 <option value="" className="bg-slate-900 text-white">All Properties</option>
-                {(properties || []).map(p => (
+                {(properties || []).map((p) => (
                   <option key={p.id} value={p.id!} className="bg-slate-900 text-white">{p.name}</option>
                 ))}
               </select>
@@ -88,7 +86,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </div>
         )}
 
-        {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           {nav.map(({ icon: Icon, label, path }) => (
             <NavLink
@@ -111,7 +108,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Footer */}
         <div className="px-4 py-4 border-t border-white/8">
           <p className="text-slate-500 text-xs text-center">Arkila v1.0 · For Filipino Landlords</p>
         </div>

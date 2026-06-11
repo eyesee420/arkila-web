@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider } from './contexts/ToastContext';
-import { ActivePropertyProvider } from './contexts/ActivePropertyContext';
+import { Toaster } from './components/ui/Toaster';
 import { Layout } from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import Properties from './pages/Properties';
@@ -15,32 +14,35 @@ import NotificationsPage from './pages/NotificationsPage';
 import Reports from './pages/Reports';
 import Receipts from './pages/Receipts';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: Infinity,
+    },
+  },
+});
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ActivePropertyProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="properties" element={<Properties />} />
-              <Route path="units" element={<Units />} />
-              <Route path="tenants" element={<Tenants />} />
-              <Route path="rent-payments" element={<RentPayments />} />
-              <Route path="utilities" element={<Utilities />} />
-              <Route path="expenses" element={<Expenses />} />
-              <Route path="documents" element={<Documents />} />
-              <Route path="notifications" element={<NotificationsPage />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="receipts" element={<Receipts />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ToastProvider>
-      </ActivePropertyProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="properties" element={<Properties />} />
+            <Route path="units" element={<Units />} />
+            <Route path="tenants" element={<Tenants />} />
+            <Route path="rent-payments" element={<RentPayments />} />
+            <Route path="utilities" element={<Utilities />} />
+            <Route path="expenses" element={<Expenses />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="receipts" element={<Receipts />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+      <Toaster />
     </QueryClientProvider>
   );
 }

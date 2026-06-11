@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu, Bell } from 'lucide-react';
 import { Sidebar } from './Sidebar';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/db/database';
 import { Link } from 'react-router-dom';
+import { useUnreadNotificationCount } from '@/hooks/useDbQueries';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -25,17 +24,13 @@ export function Layout() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || 'Arkila';
 
-  const unreadCount = useLiveQuery(
-    () => db.notifications.filter(n => !n.isRead).count(),
-    [],
-  );
+  const { data: unreadCount } = useUnreadNotificationCount();
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="lg:ml-64 min-h-screen flex flex-col">
-        {/* Top bar */}
         <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-6 h-14 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <button
@@ -65,7 +60,6 @@ export function Layout() {
           </Link>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 p-4 lg:p-6">
           <Outlet />
         </main>

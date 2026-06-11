@@ -1,7 +1,7 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useMemo } from 'react';
 import { Building2, DoorOpen, Users, Banknote, TrendingUp, AlertCircle } from 'lucide-react';
-import { db } from '@/db/database';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
+import { useProperties, useUnits, useTenants, useRentPayments } from '@/hooks/useDbQueries';
 import { StatCard, Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Badge, statusBadge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
@@ -11,44 +11,42 @@ import { Link } from 'react-router-dom';
 export default function Dashboard() {
   const month = currentMonth();
   const year = currentYear();
-  const { activePropertyId } = useActiveProperty();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
 
-  const data = useLiveQuery(async () => {
-    const [allProperties, allUnits, allTenants, rawPayments] = await Promise.all([
-      db.properties.toArray(),
-      db.units.toArray(),
-      db.tenants.toArray(),
-      db.rentPayments.toArray(),
-    ]);
+  const { data: allProperties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: allTenants } = useTenants();
+  const { data: allPayments } = useRentPayments();
+
+  const data = useMemo(() => {
+    if (!allProperties || !allUnits || !allTenants || !allPayments) return null;
 
     const pid = activePropertyId;
-    const properties = pid ? allProperties.filter(p => p.id === pid) : allProperties;
-    const units = pid ? allUnits.filter(u => u.propertyId === pid) : allUnits;
-    const tenants = pid ? allTenants.filter(t => t.propertyId === pid) : allTenants;
-    const allPayments = pid ? rawPayments.filter(p => p.propertyId === pid) : rawPayments;
+    const properties = pid ? allProperties.filter((p) => p.id === pid) : allProperties;
+    const units = pid ? allUnits.filter((u) => u.propertyId === pid) : allUnits;
+    const tenants = pid ? allTenants.filter((t) => t.propertyId === pid) : allTenants;
+    const payments = pid ? allPayments.filter((p) => p.propertyId === pid) : allPayments;
 
-    const allRecent = await db.rentPayments.orderBy('id').reverse().toArray();
-    const recentPayments = (pid ? allRecent.filter(p => p.propertyId === pid) : allRecent).slice(0, 8);
+    // allPayments is already sorted by id desc — newest first
+    const recentPayments = (pid ? allPayments.filter((p) => p.propertyId === pid) : allPayments).slice(0, 8);
 
-    const occupied = units.filter(u => u.status === 'occupied').length;
+    const occupied = units.filter((u) => u.status === 'occupied').length;
     const vacant = units.length - occupied;
 
-    const currentPayments = allPayments.filter(p => p.month === month && p.year === year);
+    const currentPayments = payments.filter((p) => p.month === month && p.year === year);
     const collected = currentPayments
-      .filter(p => p.status === 'paid' || p.status === 'partial')
+      .filter((p) => p.status === 'paid' || p.status === 'partial')
       .reduce((s, p) => s + p.amount, 0);
 
-    // Unpaid: occupied tenants with no paid/partial record for current month
-    const occupiedUnitIds = new Set(units.filter(u => u.status === 'occupied').map(u => u.id!));
-    const occupiedTenants = tenants.filter(t => occupiedUnitIds.has(t.unitId));
+    const occupiedUnitIds = new Set(units.filter((u) => u.status === 'occupied').map((u) => u.id!));
+    const occupiedTenants = tenants.filter((t) => occupiedUnitIds.has(t.unitId));
     const paidThisMonth = new Set(
-      currentPayments.filter(p => p.status === 'paid' || p.status === 'partial').map(p => p.tenantId)
+      currentPayments.filter((p) => p.status === 'paid' || p.status === 'partial').map((p) => p.tenantId),
     );
-    const unpaid = occupiedTenants.filter(t => !paidThisMonth.has(t.id!)).length;
+    const unpaid = occupiedTenants.filter((t) => !paidThisMonth.has(t.id!)).length;
 
-    // Overdue: occupied tenants missing a paid/partial record for any of the last 2 months
     const clearedMonths = new Map<number, Set<string>>();
-    for (const p of allPayments) {
+    for (const p of payments) {
       if (p.status === 'paid' || p.status === 'partial') {
         if (!clearedMonths.has(p.tenantId)) clearedMonths.set(p.tenantId, new Set());
         clearedMonths.get(p.tenantId)!.add(`${p.month}-${p.year}`);
@@ -56,7 +54,6 @@ export default function Dashboard() {
     }
     const overdueSet = new Set<number>();
     for (const tenant of occupiedTenants) {
-      // Paid this month → considered current, not overdue
       if (paidThisMonth.has(tenant.id!)) continue;
       const moveIn = new Date(tenant.moveInDate);
       const cleared = clearedMonths.get(tenant.id!) || new Set<string>();
@@ -71,71 +68,26 @@ export default function Dashboard() {
     }
     const overdue = overdueSet.size;
 
-    const tenantMap = Object.fromEntries(tenants.map(t => [t.id!, t]));
-    const unitMap = Object.fromEntries(units.map(u => [u.id!, u]));
-    const propMap = Object.fromEntries(properties.map(p => [p.id!, p]));
+    const tenantMap = Object.fromEntries(tenants.map((t) => [t.id!, t]));
+    const unitMap = Object.fromEntries(units.map((u) => [u.id!, u]));
+    const propMap = Object.fromEntries(properties.map((p) => [p.id!, p]));
 
     return { properties, units, occupied, vacant, collected, unpaid, overdue, recentPayments, tenantMap, unitMap, propMap };
-  }, [activePropertyId]);
+  }, [allProperties, allUnits, allTenants, allPayments, activePropertyId, month, year]);
 
   if (!data) return <Spinner />;
 
   return (
     <div className="space-y-6">
-      {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard
-          label="Properties"
-          value={data.properties.length}
-          // icon={<Building2 size={19} className="text-blue-600" />}
-          icon={<Building2 className="text-blue-600 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-blue-50"
-        />
-        <StatCard
-          label="Total Units"
-          value={data.units.length}
-          // icon={<DoorOpen size={19} className="text-indigo-600" />}
-          icon={<DoorOpen className="text-indigo-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-indigo-50"
-        />
-        <StatCard
-          label="Occupied"
-          value={data.occupied}
-          // icon={<Users size={19} className="text-green-600" />}
-          icon={<Users className="text-green-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-green-50"
-          sub={`${data.vacant} vacant`}
-          subColor="text-gray-400"
-        />
-        <StatCard
-          label="Collected"
-          value={formatCurrency(data.collected)}
-          // icon={<TrendingUp size={19} className="text-emerald-600" />}
-          icon={<TrendingUp className="text-emerald-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-emerald-50"
-          sub={formatMonth(month, year)}
-        />
-        <StatCard
-          label="Unpaid"
-          value={data.unpaid}
-          // icon={<Banknote size={19} className="text-amber-600" />}
-          icon={<Banknote className="text-amber-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-amber-50"
-          sub="this month"
-          subColor={data.unpaid > 0 ? 'text-amber-500' : 'text-gray-400'}
-        />
-        <StatCard
-          label="Overdue"
-          value={data.overdue}
-          // icon={<AlertCircle size={19} className="text-red-500" />}
-          icon={<AlertCircle className="text-red-700 w-3.5 h-3.5 md:w-5 md:h-5" />}
-          iconBg="bg-red-50"
-          sub="alerts"
-          subColor={data.overdue > 0 ? 'text-red-500' : 'text-gray-400'}
-        />
+        <StatCard label="Properties" value={data.properties.length} icon={<Building2 className="text-blue-600 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-blue-50" />
+        <StatCard label="Total Units" value={data.units.length} icon={<DoorOpen className="text-indigo-700 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-indigo-50" />
+        <StatCard label="Occupied" value={data.occupied} icon={<Users className="text-green-700 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-green-50" sub={`${data.vacant} vacant`} subColor="text-gray-400" />
+        <StatCard label="Collected" value={formatCurrency(data.collected)} icon={<TrendingUp className="text-emerald-700 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-emerald-50" sub={formatMonth(month, year)} />
+        <StatCard label="Unpaid" value={data.unpaid} icon={<Banknote className="text-amber-700 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-amber-50" sub="this month" subColor={data.unpaid > 0 ? 'text-amber-500' : 'text-gray-400'} />
+        <StatCard label="Overdue" value={data.overdue} icon={<AlertCircle className="text-red-700 w-3.5 h-3.5 md:w-5 md:h-5" />} iconBg="bg-red-50" sub="alerts" subColor={data.overdue > 0 ? 'text-red-500' : 'text-gray-400'} />
       </div>
 
-      {/* Recent payments */}
       <Card>
         <CardHeader
           title="Recent Rent Payments"
@@ -163,7 +115,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.recentPayments.map(p => {
+                  {data.recentPayments.map((p) => {
                     const tenant = data.tenantMap[p.tenantId];
                     const unit = data.unitMap[p.unitId];
                     return (
@@ -173,7 +125,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-5 py-3 text-gray-600">{unit?.unitNumber || '—'}</td>
                         <td className="px-5 py-3 text-gray-600">{formatMonth(p.month, p.year)}</td>
-                        <td className="px-5 py-3 text-right  font-semibold text-blue-900">{formatCurrency(p.amount)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-blue-900">{formatCurrency(p.amount)}</td>
                         <td className="px-5 py-3">{statusBadge(p.status)}</td>
                         <td className="px-5 py-3 text-gray-400">{p.paymentDate ? formatDate(p.paymentDate) : '—'}</td>
                       </tr>
@@ -186,14 +138,13 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Occupancy by property */}
       {data.properties.length > 0 && (
         <Card>
           <CardHeader title="Occupancy by Property" />
           <CardContent className="space-y-4">
-            {data.properties.map(prop => {
-              const propUnits = data.units.filter(u => u.propertyId === prop.id!);
-              const occ = propUnits.filter(u => u.status === 'occupied').length;
+            {data.properties.map((prop) => {
+              const propUnits = data.units.filter((u) => u.propertyId === prop.id!);
+              const occ = propUnits.filter((u) => u.status === 'occupied').length;
               const pct = propUnits.length > 0 ? Math.round((occ / propUnits.length) * 100) : 0;
               return (
                 <div key={prop.id} className="flex items-center gap-4">

@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useMemo } from 'react';
 import { Building2, Plus, Pencil, Trash2, MapPin } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Property } from '@/db/database';
+import { useProperties, useUnits } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -10,7 +12,6 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
-import { useToast } from '@/contexts/ToastContext';
 import { formatDate } from '@/lib/utils';
 
 type Form = { name: string; address: string };
@@ -19,7 +20,8 @@ type Errors = Partial<Form>;
 const empty: Form = { name: '', address: '' };
 
 export default function Properties() {
-  const { showToast } = useToast();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(empty);
@@ -28,17 +30,19 @@ export default function Properties() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const unitCounts = useLiveQuery(async () => {
-    const units = await db.units.toArray();
+  const { data: properties } = useProperties();
+  const { data: units } = useUnits();
+
+  const unitCounts = useMemo(() => {
+    if (!units) return {};
     const counts: Record<number, { total: number; occupied: number }> = {};
-    units.forEach(u => {
+    units.forEach((u) => {
       if (!counts[u.propertyId]) counts[u.propertyId] = { total: 0, occupied: 0 };
       counts[u.propertyId].total++;
       if (u.status === 'occupied') counts[u.propertyId].occupied++;
     });
     return counts;
-  });
+  }, [units]);
 
   function openAdd() {
     setEditId(null);
@@ -73,6 +77,7 @@ export default function Properties() {
         await db.properties.add({ name: form.name.trim(), address: form.address.trim(), createdAt: new Date() });
         showToast('Property added successfully');
       }
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
       setModalOpen(false);
     } catch {
       showToast('Something went wrong. Please try again.', 'error');
@@ -92,6 +97,7 @@ export default function Properties() {
         return;
       }
       await db.properties.delete(deleteId);
+      queryClient.invalidateQueries({ queryKey: ['properties'] });
       showToast('Property deleted');
     } catch {
       showToast('Failed to delete property', 'error');
@@ -101,16 +107,16 @@ export default function Properties() {
     }
   }
 
-  if (!properties || !unitCounts) return <Spinner />;
+  if (!properties || !units) return <Spinner />;
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-      {properties.length > 0 && (
-        <Button onClick={openAdd}>
-          <Plus size={16} /> Add Property
-        </Button>
-      )}
+        {properties.length > 0 && (
+          <Button onClick={openAdd}>
+            <Plus size={16} /> Add Property
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -140,7 +146,7 @@ export default function Properties() {
                   </tr>
                 </thead>
                 <tbody>
-                  {properties.map(p => {
+                  {properties.map((p) => {
                     const counts = unitCounts[p.id!] || { total: 0, occupied: 0 };
                     return (
                       <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
@@ -152,9 +158,7 @@ export default function Properties() {
                           </div>
                         </td>
                         <td className="px-5 py-3 text-center text-gray-700">{counts.total}</td>
-                        <td className="px-5 py-3 text-center text-gray-700">
-                          {counts.occupied}/{counts.total}
-                        </td>
+                        <td className="px-5 py-3 text-center text-gray-700">{counts.occupied}/{counts.total}</td>
                         <td className="px-5 py-3 text-gray-500">{formatDate(p.createdAt)}</td>
                         <td className="px-5 py-3 text-right">
                           <div className="flex justify-end gap-1">
@@ -194,7 +198,7 @@ export default function Properties() {
             label="Property Name"
             placeholder="e.g., Bahay ni Reyes, Sunset Apartment"
             value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             error={errors.name}
             required
           />
@@ -202,7 +206,7 @@ export default function Properties() {
             label="Address"
             placeholder="Full address including barangay, city, province"
             value={form.address}
-            onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
             error={errors.address}
             required
           />

@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Banknote, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type RentPayment } from '@/db/database';
+import { useProperties, useUnits, useTenants, useRentPayments } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
@@ -11,8 +14,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { statusBadge } from '@/components/ui/Badge';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatCurrency, formatDate, formatMonth, monthOptions, currentMonth, currentYear } from '@/lib/utils';
 
 type Form = {
@@ -37,8 +38,9 @@ const empty: Form = {
 };
 
 export default function RentPayments() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const filterPropertyId = activePropertyId ? String(activePropertyId) : '';
   const [filterMonth, setFilterMonth] = useState(String(currentMonth()));
   const [filterYear, setFilterYear] = useState(String(currentYear()));
@@ -50,31 +52,27 @@ export default function RentPayments() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const tenants = useLiveQuery(() => db.tenants.toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const payments = useLiveQuery(async () => {
-    return db.rentPayments.orderBy('id').reverse().toArray();
-  });
+  const { data: properties } = useProperties();
+  const { data: tenants } = useTenants();
+  const { data: allUnits } = useUnits();
+  const { data: payments } = useRentPayments();
 
-  // const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
-  // const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
+  const tenantMap = Object.fromEntries((tenants || []).map((t) => [t.id!, t]));
+  const unitMap = Object.fromEntries((allUnits || []).map((u) => [u.id!, u]));
 
-  const tenantOptions = (tenants || []).map(t => ({
+  const tenantOptions = (tenants || []).map((t) => ({
     value: t.id!,
     label: `${t.firstName} ${t.lastName}`,
   }));
 
-  const filtered = (payments || []).filter(p => {
+  const filtered = (payments || []).filter((p) => {
     const mMatch = !filterMonth || p.month === Number(filterMonth);
     const yMatch = !filterYear || p.year === Number(filterYear);
     const pMatch = !filterPropertyId || p.propertyId === Number(filterPropertyId);
     return mMatch && yMatch && pMatch;
   });
 
-  const totalCollected = filtered.filter(p => p.status === 'paid' || p.status === 'partial').reduce((s, p) => s + p.amount, 0);
+  const totalCollected = filtered.filter((p) => p.status === 'paid' || p.status === 'partial').reduce((s, p) => s + p.amount, 0);
   const totalBalance = filtered.reduce((s, p) => s + p.balance, 0);
 
   function openAdd() {
@@ -103,9 +101,9 @@ export default function RentPayments() {
   }
 
   function handleTenantChange(tenantId: string) {
-    const tenant = (tenants || []).find(t => t.id === Number(tenantId));
+    const tenant = (tenants || []).find((t) => t.id === Number(tenantId));
     const unit = tenant ? unitMap[tenant.unitId] : undefined;
-    setForm(f => ({
+    setForm((f) => ({
       ...f,
       tenantId,
       unitId: tenant ? String(tenant.unitId) : '',
@@ -152,6 +150,7 @@ export default function RentPayments() {
         await db.rentPayments.add({ ...data, createdAt: new Date() });
         showToast('Payment recorded successfully');
       }
+      queryClient.invalidateQueries({ queryKey: ['rentPayments'] });
       setModalOpen(false);
     } catch {
       showToast('Something went wrong', 'error');
@@ -165,6 +164,7 @@ export default function RentPayments() {
     setDeleting(true);
     try {
       await db.rentPayments.delete(deleteId);
+      queryClient.invalidateQueries({ queryKey: ['rentPayments'] });
       showToast('Payment record deleted');
     } catch {
       showToast('Failed to delete', 'error');
@@ -183,13 +183,12 @@ export default function RentPayments() {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <SelectField options={monthOptions()} placeholder="All Months" value={filterMonth}
-            onChange={e => setFilterMonth(e.target.value)} className="w-36" />
+            onChange={(e) => setFilterMonth(e.target.value)} className="w-36" />
           <SelectField options={yearOptions} placeholder="All Years" value={filterYear}
-            onChange={e => setFilterYear(e.target.value)} className="w-28" />
+            onChange={(e) => setFilterYear(e.target.value)} className="w-28" />
         </div>
         {filtered.length > 0 && (
           <Button onClick={openAdd}>
@@ -198,8 +197,6 @@ export default function RentPayments() {
         )}
       </div>
 
-
-      {/* Summary */}
       {filtered.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div className="bg-green-50 rounded-lg p-4">
@@ -244,7 +241,7 @@ export default function RentPayments() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(p => {
+                  {filtered.map((p) => {
                     const tenant = tenantMap[p.tenantId];
                     const unit = unitMap[p.unitId];
                     return (
@@ -296,54 +293,20 @@ export default function RentPayments() {
         }
       >
         <div className="space-y-4">
-          <SelectField
-            label="Tenant"
-            options={tenantOptions}
-            placeholder="Select tenant"
-            value={form.tenantId}
-            onChange={e => handleTenantChange(e.target.value)}
-            error={errors.tenantId}
-            required
-          />
+          <SelectField label="Tenant" options={tenantOptions} placeholder="Select tenant" value={form.tenantId}
+            onChange={(e) => handleTenantChange(e.target.value)} error={errors.tenantId} required />
           <div className="grid grid-cols-2 gap-4">
-            <SelectField
-              label="Month"
-              options={monthOptions()}
-              placeholder="Select month"
-              value={form.month}
-              onChange={e => setForm(f => ({ ...f, month: e.target.value }))}
-              error={errors.month}
-              required
-            />
-            <SelectField
-              label="Year"
-              options={yearOptions}
-              value={form.year}
-              onChange={e => setForm(f => ({ ...f, year: e.target.value }))}
-              error={errors.year}
-              required
-            />
+            <SelectField label="Month" options={monthOptions()} placeholder="Select month" value={form.month}
+              onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} error={errors.month} required />
+            <SelectField label="Year" options={yearOptions} value={form.year}
+              onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))} error={errors.year} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Monthly Rent Due (₱)"
-              type="number"
-              value={form.amountDue}
-              onChange={e => setForm(f => ({ ...f, amountDue: e.target.value }))}
-              hint="Auto-filled from unit rate"
-            />
-            <Input
-              label="Amount Paid (₱)"
-              type="number"
-              min="0"
-              placeholder="0.00"
-              value={form.amountPaid}
-              onChange={e => setForm(f => ({ ...f, amountPaid: e.target.value }))}
-              error={errors.amountPaid}
-              required
-            />
+            <Input label="Monthly Rent Due (₱)" type="number" value={form.amountDue}
+              onChange={(e) => setForm((f) => ({ ...f, amountDue: e.target.value }))} hint="Auto-filled from unit rate" />
+            <Input label="Amount Paid (₱)" type="number" min="0" placeholder="0.00" value={form.amountPaid}
+              onChange={(e) => setForm((f) => ({ ...f, amountPaid: e.target.value }))} error={errors.amountPaid} required />
           </div>
-          {/* Balance preview */}
           {form.amountDue && (
             <div className={`rounded-lg p-3 text-sm ${balance > 0 ? 'bg-amber-50' : 'bg-green-50'}`}>
               <div className="flex justify-between">
@@ -355,22 +318,16 @@ export default function RentPayments() {
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
-            <SelectField
-              label="Payment Method"
+            <SelectField label="Payment Method"
               options={[
                 { value: 'cash', label: 'Cash' },
                 { value: 'gcash', label: 'GCash' },
                 { value: 'bank_transfer', label: 'Bank Transfer' },
               ]}
               value={form.paymentMethod}
-              onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value as Form['paymentMethod'] }))}
-            />
-            <Input
-              label="Payment Date"
-              type="date"
-              value={form.paymentDate}
-              onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))}
-            />
+              onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value as Form['paymentMethod'] }))} />
+            <Input label="Payment Date" type="date" value={form.paymentDate}
+              onChange={(e) => setForm((f) => ({ ...f, paymentDate: e.target.value }))} />
           </div>
         </div>
       </Modal>

@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useRef, useMemo } from 'react';
 import { Printer, Eye } from 'lucide-react';
-import { db, type RentPayment } from '@/db/database';
+import { useProperties, useUnits, useTenants, useRentPayments } from '@/hooks/useDbQueries';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { SelectField } from '@/components/ui/SelectField';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { statusBadge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate, formatMonth, amountToWords, monthOptions, currentMonth, currentYear } from '@/lib/utils';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
+import type { RentPayment } from '@/db/database';
 
 interface ReceiptData {
   payment: RentPayment;
@@ -21,39 +21,36 @@ interface ReceiptData {
 }
 
 export default function Receipts() {
-  const { activePropertyId } = useActiveProperty();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const [filterTenantId, setFilterTenantId] = useState('');
   const [filterMonth, setFilterMonth] = useState(String(currentMonth()));
   const [filterYear, setFilterYear] = useState(String(currentYear()));
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const properties = useLiveQuery(() => db.properties.toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const tenants = useLiveQuery(async () => {
-    const all = await db.tenants.toArray();
-    return all.sort((a, b) => a.firstName.localeCompare(b.firstName));
-  });
-  const payments = useLiveQuery(async () => {
-    const all = await db.rentPayments
-      .where('status').anyOf(['paid', 'partial'])
-      .toArray();
-    return all.sort((a, b) => b.id! - a.id!); // newest first via auto-increment id
-  });
+  const { data: properties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: tenants } = useTenants();
+  const { data: allPayments } = useRentPayments();
 
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
-  const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p]));
+  const unitMap = Object.fromEntries((allUnits || []).map((u) => [u.id!, u]));
+  const tenantMap = Object.fromEntries((tenants || []).map((t) => [t.id!, t]));
   const tenantOptions = (tenants || [])
-    .filter(t => !activePropertyId || t.propertyId === activePropertyId)
-    .map(t => ({ value: t.id!, label: `${t.firstName} ${t.lastName}` }));
+    .filter((t) => !activePropertyId || t.propertyId === activePropertyId)
+    .map((t) => ({ value: t.id!, label: `${t.firstName} ${t.lastName}` }));
+
+  const payments = useMemo(
+    () => (allPayments || []).filter((p) => p.status === 'paid' || p.status === 'partial'),
+    [allPayments],
+  );
 
   const yearOptions = Array.from({ length: 5 }, (_, i) => {
     const y = currentYear() - 2 + i;
     return { value: y, label: String(y) };
   });
 
-  const filtered = (payments || []).filter(p => {
+  const filtered = payments.filter((p) => {
     const pMatch = !activePropertyId || p.propertyId === activePropertyId;
     const tMatch = !filterTenantId || p.tenantId === Number(filterTenantId);
     const mMatch = !filterMonth || p.month === Number(filterMonth);
@@ -75,22 +72,17 @@ export default function Receipts() {
     });
   }
 
-  function handlePrint() {
-    window.print();
-  }
-
-  if (!properties || !allUnits || !tenants || !payments) return <Spinner />;
+  if (!properties || !allUnits || !tenants || !allPayments) return <Spinner />;
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <SelectField options={tenantOptions} placeholder="All Tenants" value={filterTenantId}
-          onChange={e => setFilterTenantId(e.target.value)} className="w-48" />
+          onChange={(e) => setFilterTenantId(e.target.value)} className="w-48" />
         <SelectField options={monthOptions()} placeholder="All Months" value={filterMonth}
-          onChange={e => setFilterMonth(e.target.value)} className="w-36" />
+          onChange={(e) => setFilterMonth(e.target.value)} className="w-36" />
         <SelectField options={yearOptions} placeholder="All Years" value={filterYear}
-          onChange={e => setFilterYear(e.target.value)} className="w-28" />
+          onChange={(e) => setFilterYear(e.target.value)} className="w-28" />
       </div>
 
       <Card>
@@ -116,7 +108,7 @@ export default function Receipts() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(p => {
+                  {filtered.map((p) => {
                     const tenant = tenantMap[p.tenantId];
                     const unit = unitMap[p.unitId];
                     return (
@@ -146,7 +138,6 @@ export default function Receipts() {
         </CardContent>
       </Card>
 
-      {/* Receipt modal */}
       <Modal
         open={receiptData !== null}
         onClose={() => setReceiptData(null)}
@@ -155,22 +146,19 @@ export default function Receipts() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setReceiptData(null)}>Close</Button>
-            <Button onClick={handlePrint}><Printer size={14} />Print Receipt</Button>
+            <Button onClick={() => window.print()}><Printer size={14} />Print Receipt</Button>
           </>
         }
       >
         {receiptData && (
           <div ref={printRef} className="print-receipt">
-            {/* Receipt content */}
             <div className="border-2 border-gray-800 rounded-lg p-6 font-mono">
-              {/* Header */}
               <div className="text-center border-b-2 border-gray-800 pb-4 mb-4">
                 <h2 className="text-xl font-bold uppercase tracking-widest">Official Receipt</h2>
                 <p className="text-sm font-semibold mt-1">{receiptData.propertyName}</p>
                 <p className="text-xs text-gray-600 mt-0.5">{receiptData.propertyAddress}</p>
               </div>
 
-              {/* OR Number + Date */}
               <div className="flex justify-between text-xs mb-4">
                 <div>
                   <span className="text-gray-500">OR No.: </span>
@@ -184,7 +172,6 @@ export default function Receipts() {
                 </div>
               </div>
 
-              {/* Received from */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-2 text-sm">
                   <span className="text-gray-500 whitespace-nowrap">Received from:</span>
@@ -192,7 +179,6 @@ export default function Receipts() {
                 </div>
               </div>
 
-              {/* Unit */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-2 text-sm">
                   <span className="text-gray-500 whitespace-nowrap">Unit / Room:</span>
@@ -202,7 +188,6 @@ export default function Receipts() {
                 </div>
               </div>
 
-              {/* Amount in words */}
               <div className="mb-3">
                 <div className="text-sm">
                   <span className="text-gray-500">The sum of: </span>
@@ -210,12 +195,10 @@ export default function Receipts() {
                 </div>
               </div>
 
-              {/* Amount box */}
               <div className="border-2 border-gray-800 rounded p-3 text-center my-4">
                 <p className="text-3xl font-black tracking-tight">{formatCurrency(receiptData.payment.amount)}</p>
               </div>
 
-              {/* Payment for */}
               <div className="mb-3 text-sm">
                 <span className="text-gray-500">In payment of: </span>
                 <span className="font-bold">
@@ -223,20 +206,17 @@ export default function Receipts() {
                 </span>
               </div>
 
-              {/* Payment method */}
               <div className="mb-4 text-sm">
                 <span className="text-gray-500">Payment via: </span>
                 <span className="font-bold capitalize">{receiptData.payment.paymentMethod.replace('_', ' ')}</span>
               </div>
 
-              {/* Balance note */}
               {receiptData.payment.balance > 0 && (
                 <div className="bg-amber-50 border border-amber-300 rounded p-2 mb-4 text-xs text-center">
                   <span className="text-amber-800">Remaining Balance: <strong>{formatCurrency(receiptData.payment.balance)}</strong></span>
                 </div>
               )}
 
-              {/* Signature */}
               <div className="flex justify-between items-end mt-6 pt-4 border-t border-gray-400">
                 <div className="text-center">
                   <div className="w-36 border-b border-gray-600 mb-1" style={{ height: 40 }} />
@@ -256,7 +236,6 @@ export default function Receipts() {
         )}
       </Modal>
 
-      {/* Print styles */}
       <style>{`
         @media print {
           body * { visibility: hidden !important; }

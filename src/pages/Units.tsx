@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useMemo } from 'react';
 import { DoorOpen, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Unit } from '@/db/database';
+import { useProperties, useUnits, useTenants } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
@@ -11,8 +14,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge, statusBadge } from '@/components/ui/Badge';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatCurrency } from '@/lib/utils';
 
 type Form = {
@@ -26,8 +27,9 @@ type Errors = Partial<Form>;
 const empty: Form = { propertyId: '', unitNumber: '', monthlyRent: '', status: 'vacant' };
 
 export default function Units() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const filterPropertyId = activePropertyId ? String(activePropertyId) : '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -37,17 +39,20 @@ export default function Units() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const units = useLiveQuery(async () => {
-    const all = await db.units.toArray();
-    const tenants = await db.tenants.toArray();
-    const tenantMap = Object.fromEntries(tenants.map(t => [t.unitId, t]));
-    return all.map(u => ({ ...u, tenant: tenantMap[u.id!] }));
-  });
+  const { data: properties } = useProperties();
+  const { data: unitsRaw } = useUnits();
+  const { data: tenants } = useTenants();
 
-  const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
+  const units = useMemo(() => {
+    if (!unitsRaw || !tenants) return undefined;
+    const tenantMap = Object.fromEntries(tenants.map((t) => [t.unitId, t]));
+    return unitsRaw.map((u) => ({ ...u, tenant: tenantMap[u.id!] }));
+  }, [unitsRaw, tenants]);
 
-  const filtered = (units || []).filter(u =>
+  const propOptions = (properties || []).map((p) => ({ value: p.id!, label: p.name }));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p.name]));
+
+  const filtered = (units || []).filter((u) =>
     filterPropertyId ? u.propertyId === Number(filterPropertyId) : true,
   );
 
@@ -97,6 +102,7 @@ export default function Units() {
         await db.units.add({ ...data, createdAt: new Date() });
         showToast('Unit added successfully');
       }
+      queryClient.invalidateQueries({ queryKey: ['units'] });
       setModalOpen(false);
     } catch {
       showToast('Something went wrong', 'error');
@@ -116,6 +122,7 @@ export default function Units() {
         return;
       }
       await db.units.delete(deleteId);
+      queryClient.invalidateQueries({ queryKey: ['units'] });
       showToast('Unit deleted');
     } catch {
       showToast('Failed to delete unit', 'error');
@@ -126,8 +133,6 @@ export default function Units() {
   }
 
   if (!properties || !units) return <Spinner />;
-
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
 
   return (
     <div className="space-y-4">
@@ -166,7 +171,7 @@ export default function Units() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(u => (
+                  {filtered.map((u) => (
                     <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3 font-semibold text-gray-900">{u.unitNumber}</td>
                       <td className="px-5 py-3 text-gray-600">{propMap[u.propertyId] || '—'}</td>
@@ -194,11 +199,10 @@ export default function Units() {
         </CardContent>
       </Card>
 
-      {/* Summary badges */}
       {filtered.length > 0 && (
         <div className="flex gap-3 flex-wrap">
-          <Badge variant="blue">{filtered.filter(u => u.status === 'occupied').length} Occupied</Badge>
-          <Badge variant="gray">{filtered.filter(u => u.status === 'vacant').length} Vacant</Badge>
+          <Badge variant="blue">{filtered.filter((u) => u.status === 'occupied').length} Occupied</Badge>
+          <Badge variant="gray">{filtered.filter((u) => u.status === 'vacant').length} Vacant</Badge>
         </div>
       )}
 
@@ -221,7 +225,7 @@ export default function Units() {
             options={propOptions}
             placeholder="Select property"
             value={form.propertyId}
-            onChange={e => setForm(f => ({ ...f, propertyId: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, propertyId: e.target.value }))}
             error={errors.propertyId}
             required
           />
@@ -229,7 +233,7 @@ export default function Units() {
             label="Unit Number / Name"
             placeholder="e.g., Unit 1, Room 2A, Door 3"
             value={form.unitNumber}
-            onChange={e => setForm(f => ({ ...f, unitNumber: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, unitNumber: e.target.value }))}
             error={errors.unitNumber}
             required
           />
@@ -239,7 +243,7 @@ export default function Units() {
             min="0"
             placeholder="e.g., 5000"
             value={form.monthlyRent}
-            onChange={e => setForm(f => ({ ...f, monthlyRent: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, monthlyRent: e.target.value }))}
             error={errors.monthlyRent}
             required
           />
@@ -250,7 +254,7 @@ export default function Units() {
               { value: 'occupied', label: 'Occupied' },
             ]}
             value={form.status}
-            onChange={e => setForm(f => ({ ...f, status: e.target.value as 'occupied' | 'vacant' }))}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as 'occupied' | 'vacant' }))}
             required
           />
         </div>

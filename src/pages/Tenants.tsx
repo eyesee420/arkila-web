@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { Users, Plus, Pencil, Trash2, Phone, Mail } from 'lucide-react';
+import { Users, Plus, Pencil, Trash2, Phone, Mail, CalendarClock } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Tenant } from '@/db/database';
+import { useProperties, useUnits, useTenants, useRentPayments } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
@@ -11,8 +14,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge, statusBadge } from '@/components/ui/Badge';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatCurrency, formatDate, currentMonth, currentYear } from '@/lib/utils';
 
 type Form = {
@@ -36,8 +37,9 @@ const empty: Form = {
 };
 
 export default function Tenants() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const filterPropertyId = activePropertyId ? String(activePropertyId) : '';
   const [modalOpen, setModalOpen] = useState(false);
   const [viewId, setViewId] = useState<number | null>(null);
@@ -48,35 +50,32 @@ export default function Tenants() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const tenants = useLiveQuery(async () => {
-    const all = await db.tenants.toArray();
-    return all.sort((a, b) => a.firstName.localeCompare(b.firstName));
-  });
-  const payments = useLiveQuery(() => db.rentPayments.toArray());
+  const { data: properties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: tenants } = useTenants();
+  const { data: payments } = useRentPayments();
 
-  const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
+  const propOptions = (properties || []).map((p) => ({ value: p.id!, label: p.name }));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p.name]));
+  const unitMap = Object.fromEntries((allUnits || []).map((u) => [u.id!, u]));
 
-  const filteredUnits = (allUnits || []).filter(u =>
+  const filteredUnits = (allUnits || []).filter((u) =>
     form.propertyId ? u.propertyId === Number(form.propertyId) : true,
   );
-  const unitOptions = filteredUnits.map(u => ({ value: u.id!, label: u.unitNumber }));
+  const unitOptions = filteredUnits.map((u) => ({ value: u.id!, label: u.unitNumber }));
 
-  const filtered = (tenants || []).filter(t =>
+  const filtered = (tenants || []).filter((t) =>
     filterPropertyId ? t.propertyId === Number(filterPropertyId) : true,
   );
 
-  const viewTenant = viewId !== null ? (tenants || []).find(t => t.id === viewId) : null;
+  const viewTenant = viewId !== null ? (tenants || []).find((t) => t.id === viewId) : null;
 
   const month = currentMonth();
   const year = currentYear();
   const paidThisMonth = new Set(
     (payments || [])
-      .filter(p => p.month === month && p.year === year && (p.status === 'paid' || p.status === 'partial'))
-      .map(p => p.tenantId),
+      .filter((p) => p.month === month && p.year === year && (p.status === 'paid' || p.status === 'partial'))
+      .map((p) => p.tenantId),
   );
   const clearedMonths = new Map<number, Set<string>>();
   for (const p of (payments || [])) {
@@ -85,6 +84,19 @@ export default function Tenants() {
       clearedMonths.get(p.tenantId)!.add(`${p.month}-${p.year}`);
     }
   }
+
+  function nextPaymentDate(moveInDate: Date): Date {
+    const day = new Date(moveInDate).getDate();
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth() + 1, day);
+  }
+
+  function avatarColor(firstName: string, lastName: string): string {
+    const palette = ['bg-blue-500','bg-indigo-500','bg-violet-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-cyan-500','bg-teal-500'];
+    const code = (firstName.charCodeAt(0) || 0) + (lastName.charCodeAt(0) || 0);
+    return palette[code % palette.length];
+  }
+
   function rentStatus(t: Tenant): 'paid' | 'overdue' | 'unpaid' {
     if (paidThisMonth.has(t.id!)) return 'paid';
     const moveIn = new Date(t.moveInDate);
@@ -158,7 +170,6 @@ export default function Tenants() {
       };
       if (editId) {
         await db.tenants.update(editId, data);
-        // Update unit status
         await db.units.update(Number(form.unitId), { status: 'occupied' });
         showToast('Tenant updated successfully');
       } else {
@@ -166,6 +177,8 @@ export default function Tenants() {
         await db.units.update(Number(form.unitId), { status: 'occupied' });
         showToast('Tenant added successfully');
       }
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['units'] });
       setModalOpen(false);
     } catch {
       showToast('Something went wrong', 'error');
@@ -178,9 +191,11 @@ export default function Tenants() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      const tenant = (tenants || []).find(t => t.id === deleteId);
+      const tenant = (tenants || []).find((t) => t.id === deleteId);
       await db.tenants.delete(deleteId);
       if (tenant) await db.units.update(tenant.unitId, { status: 'vacant' });
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['units'] });
       showToast('Tenant removed. Unit is now vacant.');
     } catch {
       showToast('Failed to remove tenant', 'error');
@@ -225,6 +240,7 @@ export default function Tenants() {
                     <th className="text-left px-5 py-3 font-medium text-gray-500">Property</th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500">Contact</th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500">Move-in</th>
+                    <th className="text-left px-5 py-3 font-medium text-gray-500">Next Payment</th>
                     <th className="text-right px-5 py-3 font-medium text-gray-500">Deposit</th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500">Deposit Status</th>
                     <th className="text-left px-5 py-3 font-medium text-gray-500">Rent Status</th>
@@ -232,15 +248,20 @@ export default function Tenants() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(t => (
+                  {filtered.map((t) => (
                     <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                       <td className="px-5 py-3">
-                        <button
-                          onClick={() => setViewId(t.id!)}
-                          className="font-semibold underline text-blue-700 hover:text-blue-900 cursor-pointer text-left"
-                        >
-                          {t.firstName} {t.lastName}
-                        </button>
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-full ${avatarColor(t.firstName, t.lastName)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                            {t.firstName[0]}{t.lastName[0]}
+                          </div>
+                          <button
+                            onClick={() => setViewId(t.id!)}
+                            className="font-semibold underline text-blue-700 hover:text-blue-900 cursor-pointer text-left"
+                          >
+                            {t.firstName} {t.lastName}
+                          </button>
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-gray-600">{unitMap[t.unitId]?.unitNumber || '—'}</td>
                       <td className="px-5 py-3 text-gray-600">{propMap[t.propertyId] || '—'}</td>
@@ -251,6 +272,12 @@ export default function Tenants() {
                         </div>
                       </td>
                       <td className="px-5 py-3 text-gray-600">{formatDate(t.moveInDate)}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1.5 text-gray-600">
+                          <CalendarClock size={13} className="text-gray-400" />
+                          {formatDate(nextPaymentDate(t.moveInDate))}
+                        </div>
+                      </td>
                       <td className="px-5 py-3 text-right font-medium text-gray-900">{formatCurrency(t.depositPaid)}</td>
                       <td className="px-5 py-3">{statusBadge(t.depositStatus)}</td>
                       <td className="px-5 py-3">
@@ -258,7 +285,7 @@ export default function Tenants() {
                           const s = rentStatus(t);
                           if (s === 'paid') return <Badge variant="green">Paid</Badge>;
                           if (s === 'overdue') return <Badge variant="red">Overdue</Badge>;
-                          return <Badge variant="amber">Unpaid</Badge>;
+                          return <Badge variant="amber">Due</Badge>;
                         })()}
                       </td>
                       <td className="px-5 py-3 text-right">
@@ -280,7 +307,6 @@ export default function Tenants() {
         </CardContent>
       </Card>
 
-      {/* View tenant modal */}
       {viewTenant && (
         <Modal
           open={viewId !== null}
@@ -297,16 +323,24 @@ export default function Tenants() {
         >
           <div className="space-y-4">
             <div className="bg-blue-50 rounded-lg p-4">
-              <h3 className="text-lg font-bold text-blue-900">{viewTenant.firstName} {viewTenant.lastName}</h3>
-              <div className="mt-2 space-y-1 text-sm text-blue-700">
-                <div className="flex items-center gap-2"><Phone size={14} />{viewTenant.phone}</div>
-                {viewTenant.email && <div className="flex items-center gap-2"><Mail size={14} />{viewTenant.email}</div>}
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-full ${avatarColor(viewTenant.firstName, viewTenant.lastName)} flex items-center justify-center text-white text-base font-bold shrink-0`}>
+                  {viewTenant.firstName[0]}{viewTenant.lastName[0]}
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-blue-900">{viewTenant.firstName} {viewTenant.lastName}</h3>
+                  <div className="mt-1 space-y-0.5 text-sm text-blue-700">
+                    <div className="flex items-center gap-2"><Phone size={14} />{viewTenant.phone}</div>
+                    {viewTenant.email && <div className="flex items-center gap-2"><Mail size={14} />{viewTenant.email}</div>}
+                  </div>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><p className="text-gray-500">Unit</p><p className="font-medium">{unitMap[viewTenant.unitId]?.unitNumber || '—'}</p></div>
               <div><p className="text-gray-500">Property</p><p className="font-medium">{propMap[viewTenant.propertyId] || '—'}</p></div>
               <div><p className="text-gray-500">Move-in Date</p><p className="font-medium">{formatDate(viewTenant.moveInDate)}</p></div>
+              <div><p className="text-gray-500">Next Payment</p><p className="font-medium text-blue-700">{formatDate(nextPaymentDate(viewTenant.moveInDate))}</p></div>
               <div><p className="text-gray-500">Monthly Rent</p><p className="font-medium">{formatCurrency(unitMap[viewTenant.unitId]?.monthlyRent || 0)}</p></div>
               <div><p className="text-gray-500">Deposit Paid</p><p className="font-medium">{formatCurrency(viewTenant.depositPaid)}</p></div>
               <div><p className="text-gray-500">Deposit Status</p>{statusBadge(viewTenant.depositStatus)}</div>
@@ -332,7 +366,6 @@ export default function Tenants() {
         </Modal>
       )}
 
-      {/* Add/Edit modal */}
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -349,54 +382,41 @@ export default function Tenants() {
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <SelectField
-              label="Property"
-              options={propOptions}
-              placeholder="Select property"
-              value={form.propertyId}
-              onChange={e => setForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))}
-              error={errors.propertyId}
-              required
-            />
-            <SelectField
-              label="Unit"
-              options={unitOptions}
-              placeholder="Select unit"
-              value={form.unitId}
-              onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))}
-              error={errors.unitId}
-              disabled={!form.propertyId}
-              required
-            />
+            <SelectField label="Property" options={propOptions} placeholder="Select property" value={form.propertyId}
+              onChange={(e) => setForm((f) => ({ ...f, propertyId: e.target.value, unitId: '' }))}
+              error={errors.propertyId} required />
+            <SelectField label="Unit" options={unitOptions} placeholder="Select unit" value={form.unitId}
+              onChange={(e) => setForm((f) => ({ ...f, unitId: e.target.value }))}
+              error={errors.unitId} disabled={!form.propertyId} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="First Name" placeholder="Juan" value={form.firstName}
-              onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} error={errors.firstName} required />
+              onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} error={errors.firstName} required />
             <Input label="Last Name" placeholder="Dela Cruz" value={form.lastName}
-              onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} error={errors.lastName} required />
+              onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} error={errors.lastName} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Phone Number" placeholder="09XX XXX XXXX" value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} error={errors.phone} required />
+              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} error={errors.phone} required />
             <Input label="Email Address" type="email" placeholder="optional" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           </div>
           <div className="border-t pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">Emergency Contact</p>
             <div className="grid grid-cols-2 gap-4">
               <Input label="Contact Name" placeholder="Full name" value={form.emergencyContact}
-                onChange={e => setForm(f => ({ ...f, emergencyContact: e.target.value }))} error={errors.emergencyContact} required />
+                onChange={(e) => setForm((f) => ({ ...f, emergencyContact: e.target.value }))} error={errors.emergencyContact} required />
               <Input label="Contact Phone" placeholder="09XX XXX XXXX" value={form.emergencyPhone}
-                onChange={e => setForm(f => ({ ...f, emergencyPhone: e.target.value }))} error={errors.emergencyPhone} required />
+                onChange={(e) => setForm((f) => ({ ...f, emergencyPhone: e.target.value }))} error={errors.emergencyPhone} required />
             </div>
           </div>
           <div className="border-t pt-4">
             <p className="text-sm font-semibold text-gray-700 mb-3">Move-in & Deposit</p>
             <div className="grid grid-cols-3 gap-4">
               <Input label="Move-in Date" type="date" value={form.moveInDate}
-                onChange={e => setForm(f => ({ ...f, moveInDate: e.target.value }))} error={errors.moveInDate} required />
+                onChange={(e) => setForm((f) => ({ ...f, moveInDate: e.target.value }))} error={errors.moveInDate} required />
               <Input label="Deposit Paid (₱)" type="number" min="0" placeholder="e.g., 10000" value={form.depositPaid}
-                onChange={e => setForm(f => ({ ...f, depositPaid: e.target.value }))} error={errors.depositPaid} required />
+                onChange={(e) => setForm((f) => ({ ...f, depositPaid: e.target.value }))} error={errors.depositPaid} required />
               <SelectField label="Deposit Status"
                 options={[
                   { value: 'active', label: 'Active' },
@@ -404,7 +424,7 @@ export default function Tenants() {
                   { value: 'refunded', label: 'Refunded' },
                 ]}
                 value={form.depositStatus}
-                onChange={e => setForm(f => ({ ...f, depositStatus: e.target.value as Form['depositStatus'] }))}
+                onChange={(e) => setForm((f) => ({ ...f, depositStatus: e.target.value as Form['depositStatus'] }))}
               />
             </div>
           </div>

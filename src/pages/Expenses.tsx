@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Wrench, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Expense } from '@/db/database';
+import { useProperties, useUnits, useExpenses } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { SelectField } from '@/components/ui/SelectField'; 
+import { SelectField } from '@/components/ui/SelectField';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 type Form = {
@@ -29,8 +30,9 @@ const empty: Form = {
 };
 
 export default function Expenses() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const filterPropertyId = activePropertyId ? String(activePropertyId) : '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -40,19 +42,19 @@ export default function Expenses() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const expenses = useLiveQuery(() => db.expenses.orderBy('date').reverse().toArray());
+  const { data: properties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: expenses } = useExpenses();
 
-  const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
+  const propOptions = (properties || []).map((p) => ({ value: p.id!, label: p.name }));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p.name]));
+  const unitMap = Object.fromEntries((allUnits || []).map((u) => [u.id!, u]));
 
   const unitsForProperty = (allUnits || [])
-    .filter(u => !form.propertyId || u.propertyId === Number(form.propertyId))
-    .map(u => ({ value: u.id!, label: u.unitNumber }));
+    .filter((u) => !form.propertyId || u.propertyId === Number(form.propertyId))
+    .map((u) => ({ value: u.id!, label: u.unitNumber }));
 
-  const filtered = (expenses || []).filter(e =>
+  const filtered = (expenses || []).filter((e) =>
     filterPropertyId ? e.propertyId === Number(filterPropertyId) : true,
   );
 
@@ -106,6 +108,7 @@ export default function Expenses() {
         await db.expenses.add({ ...data, createdAt: new Date() });
         showToast('Expense recorded');
       }
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setModalOpen(false);
     } catch { showToast('Something went wrong', 'error'); }
     finally { setSaving(false); }
@@ -116,6 +119,7 @@ export default function Expenses() {
     setDeleting(true);
     try {
       await db.expenses.delete(deleteId);
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
       showToast('Expense deleted');
     } catch { showToast('Failed to delete', 'error'); }
     finally { setDeleting(false); setDeleteId(null); }
@@ -164,7 +168,7 @@ export default function Expenses() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(e => (
+                  {filtered.map((e) => (
                     <tr key={e.id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{formatDate(e.date)}</td>
                       <td className="px-5 py-3 text-gray-900 font-medium max-w-xs">{e.description}</td>
@@ -205,21 +209,21 @@ export default function Expenses() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Property" options={propOptions} placeholder="Select property" value={form.propertyId}
-              onChange={e => setForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))}
+              onChange={(e) => setForm((f) => ({ ...f, propertyId: e.target.value, unitId: '' }))}
               error={errors.propertyId} required />
             <SelectField label="Unit (optional)" options={unitsForProperty} placeholder="Entire property"
-              value={form.unitId} onChange={e => setForm(f => ({ ...f, unitId: e.target.value }))}
+              value={form.unitId} onChange={(e) => setForm((f) => ({ ...f, unitId: e.target.value }))}
               disabled={!form.propertyId} />
           </div>
           <Textarea label="Description" placeholder="e.g., Roof repair, Plumbing fix, Repainting"
-            value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             error={errors.description} required />
           <div className="grid grid-cols-2 gap-4">
             <Input label="Amount (₱)" type="number" min="0" placeholder="e.g., 2500"
-              value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+              value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
               error={errors.amount} required />
             <Input label="Date" type="date" value={form.date}
-              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} error={errors.date} required />
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} error={errors.date} required />
           </div>
         </div>
       </Modal>

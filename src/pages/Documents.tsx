@@ -1,7 +1,10 @@
 import { useState, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { FileText, Plus, Trash2, Download, Eye, Upload, FileCheck, IdCard } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Document } from '@/db/database';
+import { useProperties, useUnits, useTenants, useDocuments } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
@@ -11,8 +14,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatDate } from '@/lib/utils';
 
 type Form = {
@@ -36,8 +37,9 @@ const typeColors: Record<string, string> = {
 };
 
 export default function Documents() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const [filterTenantId, setFilterTenantId] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
@@ -50,24 +52,20 @@ export default function Documents() {
   const [deleting, setDeleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const tenants = useLiveQuery(async () => {
-    const all = await db.tenants.toArray();
-    return all.sort((a, b) => a.firstName.localeCompare(b.firstName));
-  });
-  const documents = useLiveQuery(() => db.documents.orderBy('id').reverse().toArray());
+  const { data: properties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: tenants } = useTenants();
+  const { data: documents } = useDocuments();
 
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  // const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
-  const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p.name]));
+  const tenantMap = Object.fromEntries((tenants || []).map((t) => [t.id!, t]));
   const tenantOptions = (tenants || [])
-    .filter(t => !activePropertyId || t.propertyId === activePropertyId)
-    .map(t => ({ value: t.id!, label: `${t.firstName} ${t.lastName}` }));
+    .filter((t) => !activePropertyId || t.propertyId === activePropertyId)
+    .map((t) => ({ value: t.id!, label: `${t.firstName} ${t.lastName}` }));
 
   function handleTenantChange(tenantId: string) {
-    const tenant = (tenants || []).find(t => t.id === Number(tenantId));
-    setForm(f => ({
+    const tenant = (tenants || []).find((t) => t.id === Number(tenantId));
+    setForm((f) => ({
       ...f, tenantId,
       unitId: tenant ? String(tenant.unitId) : '',
       propertyId: tenant ? String(tenant.propertyId) : '',
@@ -82,7 +80,7 @@ export default function Documents() {
     reader.onload = () => {
       setFileData(reader.result as string);
       setFileName(file.name);
-      if (!form.name) setForm(f => ({ ...f, name: file.name.replace(/\.[^.]+$/, '') }));
+      if (!form.name) setForm((f) => ({ ...f, name: file.name.replace(/\.[^.]+$/, '') }));
     };
     reader.readAsDataURL(file);
   }
@@ -109,6 +107,7 @@ export default function Documents() {
         fileData,
         createdAt: new Date(),
       });
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast('Document uploaded successfully');
       setModalOpen(false);
       setFileData('');
@@ -122,6 +121,7 @@ export default function Documents() {
     setDeleting(true);
     try {
       await db.documents.delete(deleteId);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast('Document deleted');
     } catch { showToast('Failed to delete', 'error'); }
     finally { setDeleting(false); setDeleteId(null); }
@@ -134,7 +134,7 @@ export default function Documents() {
     a.click();
   }
 
-  const filtered = (documents || []).filter(d => {
+  const filtered = (documents || []).filter((d) => {
     const pMatch = !activePropertyId || d.propertyId === activePropertyId;
     const tMatch = !filterTenantId || d.tenantId === Number(filterTenantId);
     return pMatch && tMatch;
@@ -146,7 +146,7 @@ export default function Documents() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <SelectField options={tenantOptions} placeholder="All Tenants" value={filterTenantId}
-          onChange={e => setFilterTenantId(e.target.value)} className="w-52" />
+          onChange={(e) => setFilterTenantId(e.target.value)} className="w-52" />
         {filtered.length > 0 && (
           <Button onClick={() => { setForm(empty); setFileData(''); setFileName(''); setErrors({}); setModalOpen(true); }}>
             <Plus size={16} />Upload Document
@@ -163,7 +163,7 @@ export default function Documents() {
               action={<Button onClick={() => setModalOpen(true)}><Upload size={16} />Upload Document</Button>} />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map(doc => {
+              {filtered.map((doc) => {
                 const tenant = tenantMap[doc.tenantId];
                 const isImage = doc.fileData.startsWith('data:image/');
                 return (
@@ -202,7 +202,6 @@ export default function Documents() {
         </CardContent>
       </Card>
 
-      {/* Upload modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Upload Document"
         footer={<>
           <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
@@ -211,18 +210,17 @@ export default function Documents() {
       >
         <div className="space-y-4">
           <SelectField label="Tenant" options={tenantOptions} placeholder="Select tenant"
-            value={form.tenantId} onChange={e => handleTenantChange(e.target.value)}
+            value={form.tenantId} onChange={(e) => handleTenantChange(e.target.value)}
             error={errors.tenantId} required />
           <Input label="Document Name" placeholder="e.g., Lease Contract, Gov't ID"
-            value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             error={errors.name} required />
           <SelectField label="Document Type" options={[
             { value: 'contract', label: 'Lease Contract' },
             { value: 'id', label: 'Government ID' },
             { value: 'other', label: 'Other' },
-          ]} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as Form['type'] }))} required />
+          ]} value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as Form['type'] }))} required />
 
-          {/* File upload */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-700">File <span className="text-red-500">*</span></label>
             <div
@@ -252,7 +250,6 @@ export default function Documents() {
         </div>
       </Modal>
 
-      {/* Image preview */}
       {previewDoc && (
         <Modal open={previewDoc !== null} onClose={() => setPreviewDoc(null)} title={previewDoc.name} size="lg"
           footer={<>

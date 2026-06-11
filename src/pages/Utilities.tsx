@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Zap, Droplets, Plus, Pencil, Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { db, type Utility, type MeterReading } from '@/db/database';
+import { useProperties, useUnits, useTenants, useUtilities, useMeterReadings } from '@/hooks/useDbQueries';
+import { useToastStore } from '@/stores/useToastStore';
+import { usePropertyFilterStore } from '@/stores/usePropertyFilterStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectField } from '@/components/ui/SelectField';
@@ -11,8 +14,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge, statusBadge } from '@/components/ui/Badge';
-import { useToast } from '@/contexts/ToastContext';
-import { useActiveProperty } from '@/contexts/ActivePropertyContext';
 import { formatCurrency, formatMonth, monthOptions, currentMonth, currentYear } from '@/lib/utils';
 
 type UtilForm = {
@@ -36,8 +37,9 @@ const emptyMeter: MeterForm = {
 };
 
 export default function Utilities() {
-  const { showToast } = useToast();
-  const { activePropertyId } = useActiveProperty();
+  const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
+  const activePropertyId = usePropertyFilterStore((s) => s.activePropertyId);
   const filterPropertyId = activePropertyId ? String(activePropertyId) : '';
   const [tab, setTab] = useState<'utilities' | 'meter'>('utilities');
   const [filterMonth, setFilterMonth] = useState(String(currentMonth()));
@@ -59,25 +61,25 @@ export default function Utilities() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const properties = useLiveQuery(() => db.properties.orderBy('name').toArray());
-  const allUnits = useLiveQuery(() => db.units.toArray());
-  const tenants = useLiveQuery(() => db.tenants.toArray());
-  const utilities = useLiveQuery(() => db.utilities.orderBy('id').reverse().toArray());
-  const meterReadings = useLiveQuery(() => db.meterReadings.orderBy('id').reverse().toArray());
+  const { data: properties } = useProperties();
+  const { data: allUnits } = useUnits();
+  const { data: tenants } = useTenants();
+  const { data: utilities } = useUtilities();
+  const { data: meterReadings } = useMeterReadings();
 
-  const propOptions = (properties || []).map(p => ({ value: p.id!, label: p.name }));
-  const propMap = Object.fromEntries((properties || []).map(p => [p.id!, p.name]));
-  const unitMap = Object.fromEntries((allUnits || []).map(u => [u.id!, u]));
-  const tenantMap = Object.fromEntries((tenants || []).map(t => [t.id!, t]));
+  const propOptions = (properties || []).map((p) => ({ value: p.id!, label: p.name }));
+  const propMap = Object.fromEntries((properties || []).map((p) => [p.id!, p.name]));
+  const unitMap = Object.fromEntries((allUnits || []).map((u) => [u.id!, u]));
+  const tenantMap = Object.fromEntries((tenants || []).map((t) => [t.id!, t]));
 
   function getUnitsForProperty(propertyId: string) {
-    return (allUnits || []).filter(u => !propertyId || u.propertyId === Number(propertyId))
-      .map(u => ({ value: u.id!, label: u.unitNumber }));
+    return (allUnits || []).filter((u) => !propertyId || u.propertyId === Number(propertyId))
+      .map((u) => ({ value: u.id!, label: u.unitNumber }));
   }
 
   function handleUtilUnitChange(unitId: string) {
-    const tenant = (tenants || []).find(t => t.unitId === Number(unitId));
-    setUtilForm(f => ({ ...f, unitId, tenantId: tenant ? String(tenant.id!) : '' }));
+    const tenant = (tenants || []).find((t) => t.unitId === Number(unitId));
+    setUtilForm((f) => ({ ...f, unitId, tenantId: tenant ? String(tenant.id!) : '' }));
   }
 
   function validateUtil(): boolean {
@@ -110,6 +112,7 @@ export default function Utilities() {
         await db.utilities.add({ ...data, createdAt: new Date() });
         showToast('Utility charge added');
       }
+      queryClient.invalidateQueries({ queryKey: ['utilities'] });
       setUtilModal(false);
     } catch { showToast('Something went wrong', 'error'); }
     finally { setSaving(false); }
@@ -148,6 +151,7 @@ export default function Utilities() {
         await db.meterReadings.add({ ...data, createdAt: new Date() });
         showToast('Meter reading saved');
       }
+      queryClient.invalidateQueries({ queryKey: ['meterReadings'] });
       setMeterModal(false);
     } catch { showToast('Something went wrong', 'error'); }
     finally { setSaving(false); }
@@ -157,8 +161,13 @@ export default function Utilities() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      if (deleteType === 'utility') await db.utilities.delete(deleteId);
-      else await db.meterReadings.delete(deleteId);
+      if (deleteType === 'utility') {
+        await db.utilities.delete(deleteId);
+        queryClient.invalidateQueries({ queryKey: ['utilities'] });
+      } else {
+        await db.meterReadings.delete(deleteId);
+        queryClient.invalidateQueries({ queryKey: ['meterReadings'] });
+      }
       showToast('Deleted successfully');
     } catch { showToast('Failed to delete', 'error'); }
     finally { setDeleting(false); setDeleteId(null); }
@@ -188,7 +197,7 @@ export default function Utilities() {
 
   if (!properties || !allUnits || !tenants || !utilities || !meterReadings) return <Spinner />;
 
-  const filteredUtils = utilities.filter(u => {
+  const filteredUtils = utilities.filter((u) => {
     const mMatch = !filterMonth || u.month === Number(filterMonth);
     const yMatch = !filterYear || u.year === Number(filterYear);
     const tMatch = !filterType || u.type === filterType;
@@ -196,7 +205,7 @@ export default function Utilities() {
     return mMatch && yMatch && tMatch && pMatch;
   });
 
-  const filteredMeters = meterReadings.filter(m => {
+  const filteredMeters = meterReadings.filter((m) => {
     const mMatch = !filterMonth || m.month === Number(filterMonth);
     const yMatch = !filterYear || m.year === Number(filterYear);
     const pMatch = !filterPropertyId || m.propertyId === Number(filterPropertyId);
@@ -210,34 +219,28 @@ export default function Utilities() {
 
   return (
     <div className="space-y-4">
-      {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setTab('utilities')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === 'utilities' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
-        >
+        <button onClick={() => setTab('utilities')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === 'utilities' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}>
           <div className="flex items-center gap-2"><Zap size={15} />Charges</div>
         </button>
-        <button
-          onClick={() => setTab('meter')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === 'meter' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}
-        >
+        <button onClick={() => setTab('meter')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${tab === 'meter' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'}`}>
           <div className="flex items-center gap-2"><Droplets size={15} />Meter Readings</div>
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center justify-between">
         <div className="flex flex-wrap gap-2">
           <SelectField options={monthOptions()} placeholder="All Months" value={filterMonth}
-            onChange={e => setFilterMonth(e.target.value)} className="w-36" />
+            onChange={(e) => setFilterMonth(e.target.value)} className="w-36" />
           <SelectField options={yearOptions} placeholder="All Years" value={filterYear}
-            onChange={e => setFilterYear(e.target.value)} className="w-28" />
+            onChange={(e) => setFilterYear(e.target.value)} className="w-28" />
           {tab === 'utilities' && (
             <SelectField
               options={[{ value: 'electricity', label: 'Electricity (Meralco)' }, { value: 'water', label: 'Water' }]}
               placeholder="All Types" value={filterType}
-              onChange={e => setFilterType(e.target.value)} className="w-44" />
+              onChange={(e) => setFilterType(e.target.value)} className="w-44" />
           )}
         </div>
         <Button onClick={() => {
@@ -269,7 +272,7 @@ export default function Utilities() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUtils.map(u => {
+                    {filteredUtils.map((u) => {
                       const tenant = tenantMap[u.tenantId];
                       return (
                         <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50">
@@ -324,7 +327,7 @@ export default function Utilities() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredMeters.map(m => (
+                    {filteredMeters.map((m) => (
                       <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="px-5 py-3 font-medium text-gray-900">{unitMap[m.unitId]?.unitNumber || '—'}</td>
                         <td className="px-5 py-3 text-gray-600">{propMap[m.propertyId] || '—'}</td>
@@ -352,7 +355,6 @@ export default function Utilities() {
         </Card>
       )}
 
-      {/* Utility modal */}
       <Modal open={utilModal} onClose={() => setUtilModal(false)} title={editUtilId ? 'Edit Utility Charge' : 'Add Utility Charge'}
         footer={<>
           <Button variant="secondary" onClick={() => setUtilModal(false)}>Cancel</Button>
@@ -363,31 +365,30 @@ export default function Utilities() {
           <SelectField label="Type" options={[
             { value: 'electricity', label: 'Electricity (Meralco)' },
             { value: 'water', label: 'Water' },
-          ]} value={utilForm.type} onChange={e => setUtilForm(f => ({ ...f, type: e.target.value as 'water' | 'electricity' }))} required />
+          ]} value={utilForm.type} onChange={(e) => setUtilForm((f) => ({ ...f, type: e.target.value as 'water' | 'electricity' }))} required />
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Property" options={propOptions} placeholder="Select property" value={utilForm.propertyId}
-              onChange={e => setUtilForm(f => ({ ...f, propertyId: e.target.value, unitId: '', tenantId: '' }))}
+              onChange={(e) => setUtilForm((f) => ({ ...f, propertyId: e.target.value, unitId: '', tenantId: '' }))}
               error={utilErrors.propertyId} required />
             <SelectField label="Unit" options={getUnitsForProperty(utilForm.propertyId)} placeholder="Select unit"
-              value={utilForm.unitId} onChange={e => handleUtilUnitChange(e.target.value)}
+              value={utilForm.unitId} onChange={(e) => handleUtilUnitChange(e.target.value)}
               error={utilErrors.unitId} disabled={!utilForm.propertyId} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Month" options={monthOptions()} value={utilForm.month}
-              onChange={e => setUtilForm(f => ({ ...f, month: e.target.value }))} required />
+              onChange={(e) => setUtilForm((f) => ({ ...f, month: e.target.value }))} required />
             <SelectField label="Year" options={yearOptions} value={utilForm.year}
-              onChange={e => setUtilForm(f => ({ ...f, year: e.target.value }))} required />
+              onChange={(e) => setUtilForm((f) => ({ ...f, year: e.target.value }))} required />
           </div>
           <Input label="Amount Charged (₱)" type="number" min="0" placeholder="e.g., 850"
-            value={utilForm.amount} onChange={e => setUtilForm(f => ({ ...f, amount: e.target.value }))}
+            value={utilForm.amount} onChange={(e) => setUtilForm((f) => ({ ...f, amount: e.target.value }))}
             error={utilErrors.amount} required />
           <SelectField label="Status" options={[
             { value: 'unpaid', label: 'Unpaid' }, { value: 'paid', label: 'Paid' },
-          ]} value={utilForm.status} onChange={e => setUtilForm(f => ({ ...f, status: e.target.value as 'paid' | 'unpaid' }))} />
+          ]} value={utilForm.status} onChange={(e) => setUtilForm((f) => ({ ...f, status: e.target.value as 'paid' | 'unpaid' }))} />
         </div>
       </Modal>
 
-      {/* Meter modal */}
       <Modal open={meterModal} onClose={() => setMeterModal(false)} title={editMeterId ? 'Edit Meter Reading' : 'Add Meter Reading'}
         footer={<>
           <Button variant="secondary" onClick={() => setMeterModal(false)}>Cancel</Button>
@@ -397,24 +398,24 @@ export default function Utilities() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Property" options={propOptions} placeholder="Select property" value={meterForm.propertyId}
-              onChange={e => setMeterForm(f => ({ ...f, propertyId: e.target.value, unitId: '' }))}
+              onChange={(e) => setMeterForm((f) => ({ ...f, propertyId: e.target.value, unitId: '' }))}
               error={meterErrors.propertyId} required />
             <SelectField label="Unit" options={getUnitsForProperty(meterForm.propertyId)} placeholder="Select unit"
-              value={meterForm.unitId} onChange={e => setMeterForm(f => ({ ...f, unitId: e.target.value }))}
+              value={meterForm.unitId} onChange={(e) => setMeterForm((f) => ({ ...f, unitId: e.target.value }))}
               error={meterErrors.unitId} disabled={!meterForm.propertyId} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Month" options={monthOptions()} value={meterForm.month}
-              onChange={e => setMeterForm(f => ({ ...f, month: e.target.value }))} required />
+              onChange={(e) => setMeterForm((f) => ({ ...f, month: e.target.value }))} required />
             <SelectField label="Year" options={yearOptions} value={meterForm.year}
-              onChange={e => setMeterForm(f => ({ ...f, year: e.target.value }))} required />
+              onChange={(e) => setMeterForm((f) => ({ ...f, year: e.target.value }))} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Previous Reading (kWh)" type="number" min="0" placeholder="e.g., 1250"
-              value={meterForm.previousReading} onChange={e => setMeterForm(f => ({ ...f, previousReading: e.target.value }))}
+              value={meterForm.previousReading} onChange={(e) => setMeterForm((f) => ({ ...f, previousReading: e.target.value }))}
               error={meterErrors.previousReading} required />
             <Input label="Current Reading (kWh)" type="number" min="0" placeholder="e.g., 1380"
-              value={meterForm.currentReading} onChange={e => setMeterForm(f => ({ ...f, currentReading: e.target.value }))}
+              value={meterForm.currentReading} onChange={(e) => setMeterForm((f) => ({ ...f, currentReading: e.target.value }))}
               error={meterErrors.currentReading} required />
           </div>
           {meterForm.previousReading && meterForm.currentReading && (
